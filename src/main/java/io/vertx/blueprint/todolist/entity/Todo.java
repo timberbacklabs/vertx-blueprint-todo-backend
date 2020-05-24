@@ -129,7 +129,7 @@ public class Todo {
 
   @Override
   public String toString() {
-    return "Todo -> {" +
+    return "{" +
       "id=" + id +
       ", title='" + title + '\'' +
       ", completed=" + completed +

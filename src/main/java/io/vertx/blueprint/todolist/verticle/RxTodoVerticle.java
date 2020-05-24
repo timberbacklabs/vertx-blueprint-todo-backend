@@ -6,12 +6,12 @@ import io.vertx.blueprint.todolist.common.RestfulApiVerticle;
 import io.vertx.blueprint.todolist.entity.Todo;
 import io.vertx.blueprint.todolist.service.RedisTodoService;
 import io.vertx.blueprint.todolist.service.TodoService;
-import io.vertx.core.Future;
+import io.vertx.core.Vertx;
+import io.vertx.core.impl.logging.Logger;
+import io.vertx.core.impl.logging.LoggerFactory;
 import io.vertx.core.json.DecodeException;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.reactivex.ext.web.Router;
 import io.vertx.reactivex.ext.web.RoutingContext;
 import io.vertx.reactivex.ext.web.handler.BodyHandler;
@@ -26,20 +26,23 @@ import java.util.Objects;
  */
 public class RxTodoVerticle extends RestfulApiVerticle {
 
-  private static final Logger logger = LoggerFactory.getLogger(RxTodoVerticle.class);
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(RxTodoVerticle.class);
   private static final String HOST = "0.0.0.0";
+  private static final String REDIS_CONNECT = "redis://localhost:6379";
   private static final int PORT = 8082;
 
   private TodoService service;
 
   @Override
-  public void start(Future<Void> startFuture) throws Exception {
+//  public void start(Promise<Void> startPromise) throws Exception {
+  public void start() throws Exception {
+    LOGGER.info("Starting Verticle With Configuration " + config().encodePrettily());
     Router router = Router.router(vertx);
     // Enable HTTP Body parse.
     router.route().handler(BodyHandler.create());
     // Enable CORS.
-    enableCorsSupport(router);
+//    enableCorsSupport(router);
 
     router.get(Constants.API_GET).handler(this::handleGetTodo);
     router.get(Constants.API_LIST_ALL).handler(this::handleGetAll);
@@ -52,7 +55,10 @@ public class RxTodoVerticle extends RestfulApiVerticle {
     int port = config().getInteger("http.port", PORT);
 
     initService().andThen(createHttpServer(router, host, port))
-      .subscribe(startFuture::complete, startFuture::fail);
+//            .subscribe(startPromise::complete, startPromise::fail);
+            .subscribe();
+
+    LOGGER.info("Verticle Started");
   }
 
   private void handleCreateTodo(RoutingContext context) {
@@ -80,6 +86,7 @@ public class RxTodoVerticle extends RestfulApiVerticle {
   }
 
   private void handleGetAll(RoutingContext context) {
+    LOGGER.info("Attempting to GetAll -- " + context.getBodyAsString());
     sendResponse(context, service.getAll(), Json::encodePrettily);
   }
 
@@ -108,10 +115,11 @@ public class RxTodoVerticle extends RestfulApiVerticle {
   }
 
   private Completable initService() {
-    RedisOptions config = new RedisOptions()
-      .setHost(config().getString("redis.host", "127.0.0.1"))
-      .setPort(config().getInteger("redis.port", 6379));
-    service = new RedisTodoService(vertx, config);
+    LOGGER.info("Initializing Service");
+
+    RedisOptions options = new RedisOptions().setConnectionString(REDIS_CONNECT);
+    service = new RedisTodoService(vertx, options);
+    LOGGER.info("Starting Redis with Config: " + options.toJson());
 
     return service.initData();
   }
@@ -131,5 +139,11 @@ public class RxTodoVerticle extends RestfulApiVerticle {
       todo.setIncId();
     todo.setUrl(context.request().absoluteURI() + "/" + todo.getId());
     return todo;
+  }
+
+
+  public static void main(String[] args) {
+    Vertx vertx = Vertx.vertx();
+    vertx.deployVerticle(RxTodoVerticle.class.getName());
   }
 }
